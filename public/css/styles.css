@@ -1,0 +1,25 @@
+body {
+  background: darkgrey;
+  color: white;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: center;
+  font-size: 16pt;
+  width: 100%;
+  height: 100vh;
+}
+
+h1 {
+  font-size: 32pt;
+}
+
+h2 {
+  font-size: 40pt;
+  color: red;
+}
+
+.flex {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: red;
+}
