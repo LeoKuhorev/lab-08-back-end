@@ -9,7 +9,7 @@ const cors = require('cors');
 const superagent = require('superagent');
 const path = require('path');
 
-//Database connection
+// Database connection
 const pg = require('pg');
 const client = new pg.Client(process.env.DATABASE_URL);
 
@@ -17,8 +17,6 @@ const client = new pg.Client(process.env.DATABASE_URL);
 const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(cors());
-
-// let locations = {};
 
 // API routes
 // Serve static folder
@@ -49,7 +47,7 @@ function Weather(day) {
   this.time = new Date(day.time * 1000).toString().slice(0, 15);
 }
 
-//Event constructor
+// Event constructor
 function Event(object) {
   this.link = object.url;
   this.name = object.name.text;
@@ -57,7 +55,7 @@ function Event(object) {
   this.summary = object.summary;
 }
 
-//Trail constructor
+// Trail constructor
 function Trail(object) {
   this.name = object.name;
   this.location = object.location;
@@ -71,56 +69,43 @@ function Trail(object) {
   this.condition_time = object.conditionDate.slice(11);
 }
 
-//Check locations
-function checkLocations(city) {
-  let location = {};
-  let SQL = `SELECT address, latitude, longitude FROM locations WHERE city = '${city}'`;
-  return client.query(SQL)
-    .then(result => {
-      location = result.rows[0];
-      console.log('loc address', location.address);
-      return location.address ? true : false;
-    })
-    .catch(err => console.log(err));
-}
+// Saving location into database
 function saveLocations(object) {
-  let SQL = 'INSERT INTO locations (city, address, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *';
+  let SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *';
   let safeValues = [object.search_query, object.formatted_query, object.latitude, object.longitude];
   client.query(SQL, safeValues)
-    .then(result => console.log(result.rows));
+    .then( () => {
+      console.log(`Location ${object.search_query} saved into database`);
+      console.table(object);
+    });
 }
 
 // Event Handlers
 function locationHandler(req, res) {
-  try {
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${req.query.data}&key=${process.env.GEOCODE_API_KEY}`;
-    if (false) {
-      console.log('grabbing from cache');
-      console.log(url);
-      res.status(200).send(locations[url]);
-    } else {
-      superagent.get(url)
-        .then(data => {
-          const city = req.query.data;
-          checkLocations(city)
-            .then((data) => {
-              if (data) {
-                console.log('data!');
-              }
-              const geoData = data.body;
-              const locationData = new Location(city, geoData);
-              saveLocations(locationData);
-              console.log('grabbing from API');
-              res.status(200).send(locationData);
-
-            });
-        });
-    }
-  }
-  catch (error) {
-    // Some function or error message
-    errorHandler('Sorry, something went wrong', req, res);
-  }
+  const city = req.query.data;
+  let location = {};
+  let SQL = `SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = '${city}'`;
+  client.query(SQL)
+    .then(result => {
+      if(result.rows.length > 0) {
+        console.log(`Location ${city} found in database`);
+        console.table(result.rows[0]);
+        location = result.rows[0];
+        res.status(200).send(location);
+      } else {
+        console.log('Grabbing location data from API');
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
+        superagent.get(url)
+          .then(data => {
+            const geoData = data.body;
+            location = new Location(city, geoData);
+            saveLocations(location);
+            res.status(200).send(location);
+          })
+          .catch(err => errorHandler('Sorry, something went wrong ' + err, req, res));
+      }
+    })
+    .catch(err => errorHandler('Sorry, something went wrong ' + err, req, res));
 }
 
 function weatherHandler(req, res) {
@@ -161,7 +146,8 @@ function eventsHandler(req, res) {
         const eventsData = data.body;
         const events = eventsData.events.map(element => new Event(element));
         res.status(200).send(events);
-      });
+      })
+      .catch( () => console.log('Eventbrite API call didn\'t get through') );
   }
   catch (error) {
     errorHandler('Sorry, something went wrong', req, res);
@@ -180,4 +166,3 @@ client.connect()
     app.listen(PORT, () => console.log(`The server is up listening on ${PORT}`));
   })
   .catch(error => console.log('cannot connect to database', error));
-
