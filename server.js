@@ -27,7 +27,7 @@ app.get('/location', locationHandler);
 app.get('/weather', weatherHandler);
 app.get('/trails', trailHandler);
 app.get('/events', eventsHandler);
-app.get('/database', databaseHandler);
+app.get('/db', dbHandler);
 app.get('*', (req, res) => {
   res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
 });
@@ -155,7 +155,7 @@ function eventsHandler(req, res) {
   }
 }
 
-function databaseHandler(req, res) {
+function dbHandler(req, res) {
   let SQL = 'SELECT * FROM locations';
   client.query(SQL)
     .then( results => {
