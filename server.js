@@ -9,12 +9,16 @@ const cors = require('cors');
 const superagent = require('superagent');
 const path = require('path');
 
+//Database connection
+const pg = require('pg');
+const client = new pg.Client(process.env.DATABASE_URL);
+
 // Application setup
 const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(cors());
 
-const locations = {};
+// let locations = {};
 
 // API routes
 // Serve static folder
@@ -46,7 +50,7 @@ function Weather(day) {
 }
 
 //Event constructor
-function Event(object){
+function Event(object) {
   this.link = object.url;
   this.name = object.name.text;
   this.event_date = object.start.local.slice(0, 10);
@@ -54,7 +58,7 @@ function Event(object){
 }
 
 //Trail constructor
-function Trail(object){
+function Trail(object) {
   this.name = object.name;
   this.location = object.location;
   this.length = object.length;
@@ -67,24 +71,49 @@ function Trail(object){
   this.condition_time = object.conditionDate.slice(11);
 }
 
+//Check locations
+function checkLocations(city) {
+  let location = {};
+  let SQL = `SELECT address, latitude, longitude FROM locations WHERE city = '${city}'`;
+  return client.query(SQL)
+    .then(result => {
+      location = result.rows[0];
+      console.log('loc address', location.address);
+      return location.address ? true : false;
+    })
+    .catch(err => console.log(err));
+}
+function saveLocations(object) {
+  let SQL = 'INSERT INTO locations (city, address, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *';
+  let safeValues = [object.search_query, object.formatted_query, object.latitude, object.longitude];
+  client.query(SQL, safeValues)
+    .then(result => console.log(result.rows));
+}
 
 // Event Handlers
 function locationHandler(req, res) {
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${req.query.data}&key=${process.env.GEOCODE_API_KEY}`;
-    if(locations[url]) {
+    if (false) {
       console.log('grabbing from cache');
       console.log(url);
       res.status(200).send(locations[url]);
     } else {
       superagent.get(url)
         .then(data => {
-          const geoData = data.body;
           const city = req.query.data;
-          const locationData = new Location(city, geoData);
-          locations[url] = locationData;
-          console.log('grabbing from API');
-          res.status(200).send(locationData);
+          checkLocations(city)
+            .then((data) => {
+              if (data) {
+                console.log('data!');
+              }
+              const geoData = data.body;
+              const locationData = new Location(city, geoData);
+              saveLocations(locationData);
+              console.log('grabbing from API');
+              res.status(200).send(locationData);
+
+            });
         });
     }
   }
@@ -100,7 +129,7 @@ function weatherHandler(req, res) {
     superagent.get(url)
       .then(data => {
         const weatherData = data.body;
-        const forecasts= weatherData.daily.data.map(element => new Weather(element));
+        const forecasts = weatherData.daily.data.map(element => new Weather(element));
         res.status(200).send(forecasts);
       });
   }
@@ -109,7 +138,7 @@ function weatherHandler(req, res) {
   }
 }
 
-function trailHandler (req, res) {
+function trailHandler(req, res) {
   try {
     const url = `https://www.hikingproject.com/data/get-trails?lat=${req.query.data.latitude}4&lon=${req.query.data.longitude}&key=${process.env.TRAIL_API_KEY}`;
     superagent.get(url)
@@ -146,4 +175,9 @@ function errorHandler(error, req, res) {
 
 // Ensure that the server is listening for requests
 // THIS MUST BE AT THE BOTTOM OF THE FILE
-app.listen(PORT, () => console.log(`The server is up listening on ${PORT}`));
+client.connect()
+  .then(() => {
+    app.listen(PORT, () => console.log(`The server is up listening on ${PORT}`));
+  })
+  .catch(error => console.log('cannot connect to database', error));
+
