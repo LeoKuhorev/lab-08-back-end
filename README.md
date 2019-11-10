@@ -1,6 +1,6 @@
 # City Explorer Backend
 
-**Author**: Leo Kuhorev and Ehsan Ghafari
+**Author**: Leo Kuhorev and Tammy Ip
 
 **Version**: 0.1
 
@@ -19,52 +19,40 @@ This backend has been develeoped using Javascript with the following dependencie
 It has been deployed to http://cf301-city-explorer.herokuapp.com/.
 
 ## Change Log
-11-06-2019 855 pm - Application works with Geo, Weather and Trail hike APIs.
+11-09-2019 855 pm - Application works with Geo, Weather and Trail hike APIs.
 
 
 ## Time Estimate
 
 Number and name of feature: *Repository Set Up*
 Estimate of time needed to complete: 20 min
-Start time: 6:00 PM
-Finish time: 6:20 PM
+Start time: 1:00 PM
+Finish time: 1:20 PM
 Actual time needed to complete: 20 min
 
 Number and name of feature: *Code Review*
 Estimate of time needed to complete: 20 min
-Start time: 6:20 PM
-Finish time: 6:40 PM
+Start time: 1:30 PM
+Finish time: 1:50 PM
 Actual time needed to complete: 20 min
 
 Number and name of feature: *Heroku Deployment*
 Estimate of time needed to complete: 20 min
-Start time: 6:40 PM
-Finish time: 6:50 PM
+Start time: 2:00 PM
+Finish time: 2:10 PM
 Actual time needed to complete: 10 min
 
 Number and name of feature: *Data formatting*
 Estimate of time needed to complete: 20 min
-Start time: 6:50 PM
-Finish time: 7:10 PM
+Start time: 2:10 PM
+Finish time: 2:30 PM
 Actual time needed to complete: 20 min
 
-Number and name of feature: *Locations*
-Estimate of time needed to complete: 20 min
-Start time: 7:10 PM
-Finish time: 7:30 PM
-Actual time needed to complete: 20 min
-
-Number and name of feature: *Weather*
-Estimate of time needed to complete: 20 min
-Start time: 7:40 PM
-Finish time: 8:00 PM
-Actual time needed to complete: 20 min
-
-Number and name of feature: *HikingTrail*
-Estimate of time needed to complete: 20 min
-Start time: 8:30 PM
-Finish time: 9:00 PM
-Actual time needed to complete: 30 min
+Number and name of feature: *Check Location Feature*
+Estimate of time needed to complete: 1 hour
+Start time: 2:30 PM
+Finish time: 6:30 PM
+Actual time needed to complete: 4 hours
 
 
 ## Credits and Collaborations
