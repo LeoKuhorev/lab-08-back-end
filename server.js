@@ -70,85 +70,93 @@ function Trail(object) {
   this.condition_time = object.conditionDate.slice(11);
 }
 
+// Getting location fromm database
+async function getLocation(city, res) {
+  const SQL = 'SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = $1';
+  const location = await client.query(SQL, [city]);
+  try {
+    if(location.rows.length > 0) {
+      console.log(`Location ${city} found in database`);
+      console.table(location.rows[0]);
+      res.status(200).send(location.rows[0]);
+      return false;
+    } else {
+      return true;
+    }
+  } catch (error) {
+    errorHandler('Sorry, something went wrong', req, res);
+  }
+}
+
 // Saving location into database
-function saveLocations(object) {
+async function saveLocations(object) {
   let SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *';
   let safeValues = [object.search_query, object.formatted_query, object.latitude, object.longitude];
-  client.query(SQL, safeValues)
-    .then( () => {
-      console.log(`Location ${object.search_query} saved into database`);
-      console.table(object);
-    });
+  try {
+    await client.query(SQL, safeValues);
+    console.log(`Location ${object.search_query} saved into database`);
+    console.table(object);
+  } catch (error) {
+    errorHandler('Sorry, something went wrong', req, res);
+  }
+}
+
+// Fetch any API data
+async function fetchAPI(url) {
+  try {
+    const apiData = await superagent.get(url);
+    return apiData.body;
+  } catch (error) {
+    errorHandler('Sorry, something went wrong', req, res);
+  }
 }
 
 // Event Handlers
-function locationHandler(req, res) {
+async function locationHandler(req, res) {
   const city = req.query.data;
-  let location = {};
-  let SQL = `SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = '${city}'`;
-  client.query(SQL)
-    .then(result => {
-      if(result.rows.length > 0) {
-        console.log(`Location ${city} found in database`);
-        console.table(result.rows[0]);
-        location = result.rows[0];
-        res.status(200).send(location);
-      } else {
-        console.log('Grabbing location data from API');
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
-        superagent.get(url)
-          .then(data => {
-            const geoData = data.body;
-            location = new Location(city, geoData);
-            saveLocations(location);
-            res.status(200).send(location);
-          })
-          .catch(err => errorHandler('Sorry, something went wrong ' + err, req, res));
-      }
-    })
-    .catch(err => errorHandler('Sorry, something went wrong ' + err, req, res));
+  try {
+    let notFound = await getLocation(city, res);
+    if(notFound) {
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
+      const geoData = await fetchAPI(url);
+      const location = new Location(city, geoData);
+      saveLocations(location);
+      res.status(200).send(location);
+    }
+  } catch (error) {
+    errorHandler('Sorry, something went wrong', req, res);
+  }
 }
 
-function weatherHandler(req, res) {
+async function weatherHandler(req, res) {
   try {
     const url = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${req.query.data.latitude},${req.query.data.longitude}`;
-    superagent.get(url)
-      .then(data => {
-        const weatherData = data.body;
-        const forecasts = weatherData.daily.data.map(element => new Weather(element));
-        res.status(200).send(forecasts);
-      });
-  }
-  catch (error) {
+    const weatherData = await fetchAPI(url);
+    const forecasts = weatherData.daily.data.map(element => new Weather(element));
+    res.status(200).send(forecasts);
+  } catch (error) {
     errorHandler('Sorry, something went wrong', req, res);
   }
 }
 
-function trailHandler(req, res) {
+async function trailHandler(req, res) {
   try {
-    const url = `https://www.hikingproject.com/data/get-trails?lat=${req.query.data.latitude}4&lon=${req.query.data.longitude}&key=${process.env.TRAIL_API_KEY}`;
-    superagent.get(url)
-      .then(data => {
-        const trailBody = data.body;
-        const trailData = trailBody.trails.map(element => new Trail(element));
-        res.status(200).send(trailData);
-      });
+    const url = `https://www.hikingproject.com/data/get-trails?lat=${req.query.data.latitude}&lon=${req.query.data.longitude}&key=${process.env.TRAIL_API_KEY}`;
+    const trailBody = await fetchAPI(url);
+    const trailData = trailBody.trails.map(element => new Trail(element));
+    res.status(200).send(trailData);
   }
   catch (error) {
     errorHandler('Sorry, something went wrong', req, res);
   }
 }
 
-function eventsHandler(req, res) {
+async function eventsHandler(req, res) {
   try {
     const url = `https://www.eventbriteapi.com/v3/events/search/?location.longitude=${req.query.data.longitude}&location.latitude=${req.query.data.latitude}&expand=venue&token=${process.env.EVENTBRITE_API_KEY}`;
-    superagent.get(url)
-      .then(data => {
-        const eventsData = data.body;
-        const events = eventsData.events.map(element => new Event(element));
-        res.status(200).send(events);
-      })
-      .catch( () => console.log('Eventbrite API call didn\'t get through') );
+    const eventsData = await fetchAPI(url);
+    const events = eventsData.events.map(element => new Event(element));
+    res.status(200).send(events);
   }
   catch (error) {
     errorHandler('Sorry, something went wrong', req, res);
