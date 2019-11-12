@@ -14,7 +14,6 @@ function getData() {
         $trEl.append(`<td>${element.longitude}</td>`);
         $tableEl.append($trEl);
       });
-      console.log(data);
     });
 }
 

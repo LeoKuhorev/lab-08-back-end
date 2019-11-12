@@ -70,34 +70,40 @@ function Trail(object) {
   this.condition_time = object.conditionDate.slice(11);
 }
 
+// Getting location fromm database
+async function getLocation(city, res) {
+  const SQL = 'SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = $1';
+  const location = await client.query(SQL, [city]);
+  if(location.rows.length > 0) {
+    console.log(`Location ${city} found in database`);
+    console.table(location.rows[0]);
+    res.status(200).send(location.rows[0]);
+    return false;
+  } else {
+    return true;
+  }
+}
+
 // Saving location into database
-function saveLocations(object) {
+async function saveLocations(object) {
   let SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *';
   let safeValues = [object.search_query, object.formatted_query, object.latitude, object.longitude];
-  client.query(SQL, safeValues)
-    .then( () => {
-      console.log(`Location ${object.search_query} saved into database`);
-      console.table(object);
-    });
+  await client.query(SQL, safeValues);
+  console.log(`Location ${object.search_query} saved into database`);
+  console.table(object);
 }
 
 // Event Handlers
 function locationHandler(req, res) {
   const city = req.query.data;
-  let location = {};
-  let SQL = `SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = '${city}'`;
-  client.query(SQL)
-    .then(result => {
-      if(result.rows.length > 0) {
-        console.log(`Location ${city} found in database`);
-        console.table(result.rows[0]);
-        location = result.rows[0];
-        res.status(200).send(location);
-      } else {
+  getLocation(city, res)
+    .then(notFound => {
+      if(notFound) {
         console.log('Grabbing location data from API');
         const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
         superagent.get(url)
           .then(data => {
+            let location = {};
             const geoData = data.body;
             location = new Location(city, geoData);
             saveLocations(location);
