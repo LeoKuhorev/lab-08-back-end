@@ -19,10 +19,10 @@ const app = express();
 app.use(cors());
 
 // API routes
-// Serve static folder
+// Serving static folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Specifing the routes
+// Specifying the routes
 app.get('/location', locationHandler);
 app.get('/weather', weatherHandler);
 app.get('/trails', trailHandler);
@@ -31,7 +31,6 @@ app.get('/db', dbHandler);
 app.get('*', (req, res) => {
   res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
 });
-
 
 // Helper functions
 // Location constructor
@@ -70,17 +69,15 @@ function Trail(object) {
   this.condition_time = object.conditionDate.slice(11);
 }
 
-// Getting location fromm database
-async function getLocation(city, res) {
+// Getting location from database
+async function checkLocation(city, res) {
   const SQL = 'SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = $1';
-  const location = await client.query(SQL, [city]);
   try {
-    if(location.rows.length > 0) {
+    const location = await client.query(SQL, [city]);
+    if(location.rowCount) {
       console.log(`Location ${city} found in database`);
       console.table(location.rows[0]);
       res.status(200).send(location.rows[0]);
-      return false;
-    } else {
       return true;
     }
   } catch (error) {
@@ -88,17 +85,54 @@ async function getLocation(city, res) {
   }
 }
 
+async function checkWeather(city, res) {
+  const SQL = 'SELECT forecast, time, time_saved FROM weather JOIN locations ON weather.location_id = locations.id WHERE locations.search_query = $1';
+  try {
+    const weather = await client.query(SQL, [city]);
+    if(weather.rowCount) {
+      const timeDifference = (weather.rows[0].time_saved - Date.now()) / 60000;
+      console.log(timeDifference);
+      if(timeDifference < 60) {
+        console.log(`weather for ${city} found in database`);
+        console.table(weather.rows);
+        res.status(200).send(weather.rows);
+        return true;
+      }
+    }
+  } catch (error) {
+    console.log('Sorry, something went wrong', error);
+  }
+}
+
 // Saving location into database
 async function saveLocations(object) {
-  let SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING *';
+  let SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING id';
   let safeValues = [object.search_query, object.formatted_query, object.latitude, object.longitude];
   try {
     await client.query(SQL, safeValues);
     console.log(`Location ${object.search_query} saved into database`);
     console.table(object);
   } catch (error) {
-    errorHandler('Sorry, something went wrong', req, res);
+    console.log('Sorry, something went wrong', error);
   }
+}
+
+async function saveWeather(forecast, city) {
+  let SQL = 'INSERT INTO weather (forecast, time, time_saved, location_id) VALUES ($1, $2, $3, (SELECT id FROM locations WHERE search_query LIKE $4))';
+  let timeSaved = Date.now();
+  let safeValues = [forecast.forecast, forecast.time, timeSaved, city];
+  try {
+    await client.query(SQL, safeValues);
+    console.log('Saving weather for ', city);
+  } catch (error) {
+    console.log('Weather couldn\'t be saved', error);
+  }
+}
+
+async function clearWeather(city) {
+  console.log('deleteing rows for ', city);
+  let SQL = 'DELETE FROM weather WHERE location_id = (SELECT id FROM locations WHERE search_query LIKE $1)';
+  await client.query(SQL, [city]);
 }
 
 // Fetch any API data
@@ -107,7 +141,7 @@ async function fetchAPI(url) {
     const apiData = await superagent.get(url);
     return apiData.body;
   } catch (error) {
-    errorHandler('Sorry, something went wrong', req, res);
+    errorHandler('API call couldn\'t be completed', req, res);
   }
 }
 
@@ -115,8 +149,8 @@ async function fetchAPI(url) {
 async function locationHandler(req, res) {
   const city = req.query.data;
   try {
-    let notFound = await getLocation(city, res);
-    if(notFound) {
+    let cacheFound = await checkLocation(city, res);
+    if(!cacheFound) {
       const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
       const geoData = await fetchAPI(url);
       const location = new Location(city, geoData);
@@ -130,10 +164,15 @@ async function locationHandler(req, res) {
 
 async function weatherHandler(req, res) {
   try {
-    const url = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${req.query.data.latitude},${req.query.data.longitude}`;
-    const weatherData = await fetchAPI(url);
-    const forecasts = weatherData.daily.data.map(element => new Weather(element));
-    res.status(200).send(forecasts);
+    let weatherFound = await checkWeather(req.query.data.search_query, res);
+    if(!weatherFound) {
+      const url = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${req.query.data.latitude},${req.query.data.longitude}`;
+      const weatherData = await fetchAPI(url);
+      await clearWeather(req.query.data.search_query);
+      const forecasts = weatherData.daily.data.map(element => new Weather(element));
+      forecasts.forEach(forecast => saveWeather(forecast, req.query.data.search_query));
+      res.status(200).send(forecasts);
+    }
   } catch (error) {
     errorHandler('Sorry, something went wrong', req, res);
   }
@@ -175,9 +214,7 @@ function errorHandler(error, req, res) {
   res.status(500).send(error);
 }
 
-
 // Ensure that the server is listening for requests
-// THIS MUST BE AT THE BOTTOM OF THE FILE
 client.connect()
   .then(() => {
     app.listen(PORT, () => console.log(`The server is up listening on ${PORT}`));
