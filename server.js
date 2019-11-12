@@ -69,35 +69,47 @@ function Trail(object) {
   this.condition_time = object.conditionDate.slice(11);
 }
 
+
+async function checkDB(SQL, city, minutesToExpire) {
+  try {
+    const query = await client.query(SQL, [city]);
+    if(query.rowCount) {
+      console.log(`${city} found in database`);
+      if(minutesToExpire) {
+        var timeDifference = (Date.now() - query.rows[0].time_saved) / 60000;
+        console.log(`The result for ${city} was saved ${timeDifference.toFixed(2)} minutes ago`);
+      }
+      if(!minutesToExpire || timeDifference < minutesToExpire) {
+        console.table(query.rows);
+        return query.rows;
+      }
+    }
+  } catch (error) {
+    console.log('Sorry, something went wrong', error);
+  }
+}
+
 // Getting location from database
 async function checkLocation(city, res) {
-  const SQL = 'SELECT search_query, formatted_query, latitude, longitude FROM locations WHERE search_query = $1';
+  const SQL = 'SELECT * FROM locations WHERE search_query = $1';
   try {
-    const location = await client.query(SQL, [city]);
-    if(location.rowCount) {
-      console.log(`Location ${city} found in database`);
-      console.table(location.rows[0]);
-      res.status(200).send(location.rows[0]);
+    const location = await checkDB(SQL, city);
+    if(location) {
+      res.status(200).send(location[0]);
       return true;
     }
   } catch (error) {
-    errorHandler('Sorry, something went wrong', req, res);
+    console.log('Sorry, something went wrong', error);
   }
 }
 
 async function checkWeather(city, res) {
   const SQL = 'SELECT forecast, time, time_saved FROM weather JOIN locations ON weather.location_id = locations.id WHERE locations.search_query = $1';
   try {
-    const weather = await client.query(SQL, [city]);
-    if(weather.rowCount) {
-      const timeDifference = (weather.rows[0].time_saved - Date.now()) / 60000;
-      console.log(timeDifference);
-      if(timeDifference < 60) {
-        console.log(`weather for ${city} found in database`);
-        console.table(weather.rows);
-        res.status(200).send(weather.rows);
-        return true;
-      }
+    const weather = await checkDB(SQL, city, 60);
+    if(weather) {
+      res.status(200).send(weather);
+      return true;
     }
   } catch (error) {
     console.log('Sorry, something went wrong', error);
@@ -123,7 +135,7 @@ async function saveWeather(forecast, city) {
   let safeValues = [forecast.forecast, forecast.time, timeSaved, city];
   try {
     await client.query(SQL, safeValues);
-    console.log('Saving weather for ', city);
+    console.log('Saving weather for', city);
   } catch (error) {
     console.log('Weather couldn\'t be saved', error);
   }
@@ -141,7 +153,7 @@ async function fetchAPI(url) {
     const apiData = await superagent.get(url);
     return apiData.body;
   } catch (error) {
-    errorHandler('API call couldn\'t be completed', req, res);
+    console.log('API call couldn\'t be completed', error);
   }
 }
 
