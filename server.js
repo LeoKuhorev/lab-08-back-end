@@ -93,24 +93,23 @@ async function saveLocations(object) {
   console.table(object);
 }
 
+async function fetchLocation(city, res) {
+  console.log('Grabbing location data from API');
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
+  const data = await superagent.get(url);
+  let location = {};
+  const geoData = data.body;
+  location = new Location(city, geoData);
+  saveLocations(location);
+  res.status(200).send(location);
+}
+
 // Event Handlers
 function locationHandler(req, res) {
   const city = req.query.data;
   getLocation(city, res)
     .then(notFound => {
-      if(notFound) {
-        console.log('Grabbing location data from API');
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${city}&key=${process.env.GEOCODE_API_KEY}`;
-        superagent.get(url)
-          .then(data => {
-            let location = {};
-            const geoData = data.body;
-            location = new Location(city, geoData);
-            saveLocations(location);
-            res.status(200).send(location);
-          })
-          .catch(err => errorHandler('Sorry, something went wrong ' + err, req, res));
-      }
+      if(notFound) {fetchLocation(city, res)}
     })
     .catch(err => errorHandler('Sorry, something went wrong ' + err, req, res));
 }
