@@ -116,6 +116,19 @@ async function checkWeather(city, res) {
   }
 }
 
+async function checkEvent(city, res) {
+  const SQL = 'SELECT link, name, event_date, summary, time_saved FROM events JOIN locations ON events.location_id = locations.id WHERE locations.search_query = $1';
+  try {
+    const event = await checkDB(SQL, city, (60 * 24));
+    if(event) {
+      res.status(200).send(event);
+      return true;
+    }
+  } catch (error) {
+    console.log('Sorry, something went wrong', error);
+  }
+}
+
 // Saving location into database
 async function saveLocations(object) {
   let SQL = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4) RETURNING id';
@@ -141,9 +154,27 @@ async function saveWeather(forecast, city) {
   }
 }
 
+async function saveEvents(event, city) {
+  let SQL = 'INSERT INTO events (link, name, event_date, summary, time_saved, location_id) VALUES ($1, $2, $3, $4, $5, (SELECT id FROM locations WHERE search_query LIKE $6))';
+  let timeSaved = Date.now();
+  let safeValues = [event.link, event.name, event.date, event.summary, timeSaved, city];
+  try {
+    await client.query(SQL, safeValues);
+    console.log('Saving event for', city);
+  } catch (error) {
+    console.log('Event couldn\'t be saved', error);
+  }
+}
+
 async function clearWeather(city) {
   console.log('deleteing rows for ', city);
   let SQL = 'DELETE FROM weather WHERE location_id = (SELECT id FROM locations WHERE search_query LIKE $1)';
+  await client.query(SQL, [city]);
+}
+
+async function clearEvent(city) {
+  console.log('deleteing rows for ', city);
+  let SQL = 'DELETE FROM events WHERE location_id = (SELECT id FROM locations WHERE search_query LIKE $1)';
   await client.query(SQL, [city]);
 }
 
@@ -153,7 +184,7 @@ async function fetchAPI(url) {
     const apiData = await superagent.get(url);
     return apiData.body;
   } catch (error) {
-    console.log('API call couldn\'t be completed', error);
+    console.log('API call couldn\'t be completed, error status:', error.status);
   }
 }
 
@@ -204,10 +235,15 @@ async function trailHandler(req, res) {
 
 async function eventsHandler(req, res) {
   try {
-    const url = `https://www.eventbriteapi.com/v3/events/search/?location.longitude=${req.query.data.longitude}&location.latitude=${req.query.data.latitude}&expand=venue&token=${process.env.EVENTBRITE_API_KEY}`;
-    const eventsData = await fetchAPI(url);
-    const events = eventsData.events.map(element => new Event(element));
-    res.status(200).send(events);
+    let eventFound = await checkEvent(req.query.data.search_query, res);
+    if(!eventFound) {
+      const url = `https://www.eventbriteapi.com/v3/events/search/?location.longitude=${req.query.data.longitude}&location.latitude=${req.query.data.latitude}&expand=venue&token=${process.env.EVENTBRITE_API_KEY}`;
+      const eventsData = await fetchAPI(url);
+      await clearEvent(req.query.data.search_query);
+      const events = eventsData.events.map(element => new Event(element));
+      events.forEach(event => saveEvents(event, req.query.data.search_query));
+      res.status(200).send(events);
+    }
   }
   catch (error) {
     errorHandler('Sorry, something went wrong', req, res);

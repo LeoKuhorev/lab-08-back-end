@@ -21,7 +21,7 @@ CREATE TABLE events (
   id SERIAL PRIMARY KEY,
   link TEXT,
   name TEXT,
-  date TEXT,
+  event_date TEXT,
   summary TEXT,
   time_saved BIGINT,
   location_id INTEGER NOT NULL,
