@@ -80,7 +80,6 @@ async function checkDB(SQL, city, minutesToExpire) {
         console.log(`The result for ${city} was saved ${timeDifference.toFixed(2)} minutes ago`);
       }
       if(!minutesToExpire || timeDifference < minutesToExpire) {
-        console.table(query.rows);
         return query.rows;
       }
     }
