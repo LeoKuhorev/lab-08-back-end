@@ -157,7 +157,7 @@ async function saveWeather(forecast, city) {
 async function saveEvents(event, city) {
   let SQL = 'INSERT INTO events (link, name, event_date, summary, time_saved, location_id) VALUES ($1, $2, $3, $4, $5, (SELECT id FROM locations WHERE search_query LIKE $6))';
   let timeSaved = Date.now();
-  let safeValues = [event.link, event.name, event.date, event.summary, timeSaved, city];
+  let safeValues = [event.link, event.name, event.event_date, event.summary, timeSaved, city];
   try {
     await client.query(SQL, safeValues);
     console.log('Saving event for', city);
